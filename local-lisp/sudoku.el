@@ -1,5 +1,3 @@
-
-(require 'cl)
 (require 'easymenu)
 
 ;; This has some compatibility things built in, like propertize...
@@ -39,7 +37,6 @@
   :type '(radio (const "native-url-lib")
 		(const "lynx")
 		(const "wget")))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Non-customizable variables
@@ -202,7 +199,6 @@ are: \\{sudoku-mode-map}"
   (sudoku-create-new-puzzle)
   (sudoku-initialize))
 
-
 (defun sudoku-initialize ()
   "Makes the board, based on the \"current board\" variable, and
   sets the buffer for read-only. Used by \"sudoku-new\"."
@@ -257,11 +253,10 @@ are: \\{sudoku-mode-map}"
   (interactive)
   (if (null start-board)
       (message "You have to start before you can restart.")
-    (progn 
       (sudoku-reset-board)
-      (sudoku-initialize))))
+      (sudoku-initialize)))
 
-;; Encasulate the Board
+;; Encapsulate the Board
 (defun sudoku-get-current-board ()
   current-board)
 
@@ -531,7 +526,7 @@ are: \\{sudoku-mode-map}"
   sudoku-completion-routine (i.e., \"You Win!\")."
   (sudoku-change-point-internal input)
   (when (sudoku-finished?)
-      (sudoku-completion-routine))) 
+    (sudoku-completion-routine))) 
 
 (defun sudoku-cell-erase ()
   (interactive)
@@ -594,7 +589,7 @@ are: \\{sudoku-mode-map}"
 	   (let ((string ""))
 	     (dolist (n (cdr (sudoku-cell-possibles (sudoku-get-current-board) cell-x cell-y)))
 	       (setq string (concat (int-to-string n) "," string)))
-	       (setq string (concat string (int-to-string (car (sudoku-cell-possibles (sudoku-get-current-board) cell-x cell-y)))))
+	     (setq string (concat string (int-to-string (car (sudoku-cell-possibles (sudoku-get-current-board) cell-x cell-y)))))
 	     (message "Possible values: %s" string))))))
 
 (defun sudoku-insert-single-possibility ()
@@ -621,7 +616,7 @@ are: \\{sudoku-mode-map}"
   "Find singular values in the current column and insert it"
   (interactive)
   (sudoku-move-point "leftmost")
-   (dotimes (i 9)
+  (dotimes (i 9)
     (sudoku-insert-column-singularity)
     (sudoku-move-point "right")))
 
@@ -954,7 +949,7 @@ bounds of the board."
   (message source)
   (with-temp-buffer
     (call-process "wget" nil t nil "-q" "-O" "-" source)
-     (sudoku-get-new-puzzle)))
+    (sudoku-get-new-puzzle)))
 
 (defun get-board-native (source)
   "Downloads a websudoku html file into a temp buffer using the
@@ -970,40 +965,39 @@ bounds of the board."
   (let ((puzzle (sudoku-clean-up (sudoku-parse-buffer))))
     (if (= 2 (length puzzle))
 	(sudoku-make-board-list (sudoku-mask-puzzle (sudoku-string-to-int-list puzzle)))
-      	(message "Boo! Cannot deal with the page!"))))
+      (message "Boo! Cannot deal with the page!"))))
 
 (defun sudoku-make-board-list (puzzle-list)
   (let ((res nil))
     (dotimes (i 9 res)
       (setq res (cons (seq-take puzzle-list 9) res))
       (setq puzzle-list (seq-drop puzzle-list 9)))))
- 
+
 (defun sudoku-string-to-int-list (puzzle)
-    (let ((p (nth 1 puzzle))
-	(mask (nth 0 puzzle))
+  (let ((mask (nth 0 puzzle))
+	(p (nth 1 puzzle))
 	(p-res nil)
       	(mask-res nil))
-      (dotimes (i 81)
-	(setq p-res (cons (string-to-number (substring p i (1+ i))) p-res))
-	(setq mask-res (cons (string-to-number (substring mask i (1+ i))) mask-res )))
-      (list p-res mask-res)))
+    (dotimes (i 81)
+      (setq p-res (cons (string-to-number (substring p i (1+ i))) p-res))
+      (setq mask-res (cons (string-to-number (substring mask i (1+ i))) mask-res )))
+    (list p-res mask-res)))
 
 (defun sudoku-mask-puzzle (puzzle)
   (let ((p (nth 0 puzzle))
 	(mask (nth 1 puzzle))
 	(res nil))
     (dotimes (i 81 res)
-      (setq res (cons (if (= 0 (pop mask)) (pop p)
-			(progn (pop p) 0))
+      (setq res (cons (if (= 0 (pop mask)) (pop p) (progn (pop p) 0))
 		      res ))))) 
- 
+
 (defun sudoku-clean-up (line-list)
   (let ((res nil))
     (dolist (l line-list res)
-    (when (string-match "[0-9]+" l)
-      (let ((match (match-string 0 l)))
-	(if (= 81 (length match))
-	    (setq res (cons match res))))))))
+      (when (string-match "[0-9]+" l)
+	(let ((match (match-string 0 l)))
+	  (if (= 81 (length match))
+	      (setq res (cons match res))))))))
 
 (defun sudoku-parse-buffer ()
   "Assumes you are in another buffer, into which the websudoku
@@ -1011,13 +1005,13 @@ bounds of the board."
    can use `with-temp-buffer' and others seem to require a
    `set-buffer'. Used by the different get-board-* functions."
   (sudoku-grab-puzzle)
-  (beginning-of-buffer)
+  (goto-char (point-min))
   (let ((res nil))
-  (dotimes (i (count-lines (point-min) (point-max)) res)
-    (setq res (cons (thing-at-point 'line t) res))
-    (beginning-of-line)
-    (kill-line 1))
-  (list (nth 2 res)  (nth 1 res))))
+    (dotimes (i (count-lines (point-min) (point-max)) res)
+      (setq res (cons (thing-at-point 'line t) res))
+      (beginning-of-line)
+      (kill-line 1))
+    (list (nth 2 res) (nth 1 res))))
 
 (defun sudoku-grab-puzzle ()
   "Cuts everything out but the value containing the puzzle. Used by
