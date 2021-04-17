@@ -1,3 +1,4 @@
+(require 'cl-lib)
 (require 'easymenu)
 
 ;; This has some compatibility things built in, like propertize...
@@ -28,7 +29,10 @@
 
 (defcustom sudoku-download nil
   "*Should sudoku download puzzles from the web?"
-  :type  'boolean
+  :type  '(radio
+	   (const "Preconfigured Puzzled")
+	   (const "Generated Puzzle")
+	   (const "Download"))
   :group 'sudoku)
 
 (defcustom sudoku-download-method "lynx"
@@ -170,11 +174,13 @@ are: \\{sudoku-mode-map}"
       :style radio :selected (string= sudoku-level "hard")]
      ["Evil" (setq sudoku-level "evil") 
       :style radio :selected (string= sudoku-level "evil")])
-    ("Download"
-     ["On" (setq sudoku-download t) 
-      :style radio :selected sudoku-download]
-     ["Off" (setq sudoku-download nil)
-      :style radio :selected (null sudoku-download)])
+    ("Puzzle Source"
+     ["Preconfigured Puzzle" (setq sudoku-download "Preconfigured Puzzle") 
+      :style radio :selected (string= sudoku-download  "Preconfigured Puzzle")]
+     ["Generated Puzzle"     (setq sudoku-download "Generated Puzzle")
+      :style radio :selected (string= sudoku-download "Generated Puzzle")]
+     ["Download"             (setq sudoku-download "Download")
+      :style radio :selected (string= sudoku-download "Download")])
     ("Download Method"
      :active sudoku-download
      ["lynx"  (setq sudoku-download-method "lynx") 
@@ -218,7 +224,7 @@ are: \\{sudoku-mode-map}"
   \"sudoku-level\" variable. Uses these to either choose a random
   included board (if download is nil) or to download one from
   websudoku.com"
-  (cond (download
+  (cond ((string= download  "Download")
 	 (cond ((string= level 'easy)
 		(sudoku-download-new-puzzle 1))
 	       ((string= level 'medium)
@@ -227,7 +233,8 @@ are: \\{sudoku-mode-map}"
 		(sudoku-download-new-puzzle 3))
 	       ((string= level 'evil)
 		(sudoku-download-new-puzzle 4))))
-	(t
+	
+	((string= download "Preconfigured Puzzle")
 	 (let ((n (mod (random t) 50)))
 	   (cond ((string= level 'easy)
 		  (nth n easy-puzzles))
@@ -236,7 +243,12 @@ are: \\{sudoku-mode-map}"
 		 ((string= level 'hard)
 		  (nth n hard-puzzles))
 		 ((string= level 'evil)
-		  (nth n evil-puzzles)))))))
+		  (nth n evil-puzzles))		 
+		 )))
+	
+	((string= download "Generated Puzzle")	 	   
+	 (sudoku-create-new-board level))		 
+		 ))
 
 (defun sudoku-quit-immediately ()
   "Quit without a prompt. Designed to be used by other functions."
@@ -443,6 +455,7 @@ are: \\{sudoku-mode-map}"
 	     (message "Original value. Can't change.")
 	   (message "Not a valid move")))))
 
+
 (defun sudoku-get-cell-points ()
   "This reads a printed board and returns the point of each
    number, counting from 0. So, for a 9x9 board, we should get 81
@@ -461,7 +474,7 @@ are: \\{sudoku-mode-map}"
 	(while (not (eolp))
 	  (cond ((or (looking-at "[0-9]") (looking-at blank-cell))
 		 (setq point-list (cons (list (point) counter) point-list))
-		 (incf counter)))
+		 (setq counter (1+ counter))))
 	  (forward-char 1))
 	(forward-line 1))
       (reverse point-list))))
@@ -546,7 +559,7 @@ are: \\{sudoku-mode-map}"
   "Tests to see how many cells are remaining"
   (let ((remaining 0))
     (dolist (row (sudoku-get-current-board) remaining)
-      (setq remaining (+ remaining (count 0 row))))))
+      (setq remaining (+ remaining (cl-count 0 row))))))
 
 (defun sudoku-is-start-value? ()
   (let* ((cell (sudoku-get-cell-from-point (point)))
@@ -941,12 +954,11 @@ bounds of the board."
    and turns it into a list. Used by sudoku-download-new-puzzle."
   (with-temp-buffer
     (call-process "lynx" nil t nil "--source" source)
-    (sudoku-html-to-list)))
+    (sudoku-get-new-puzzle)))
 
 (defun get-board-wget (source)
   "Downloads a websudoku html file into a temp buffer using wget
    and turns it into a list. Used by sudoku-download-new-puzzle."
-  (message source)
   (with-temp-buffer
     (call-process "wget" nil t nil "-q" "-O" "-" source)
     (sudoku-get-new-puzzle)))
@@ -957,8 +969,8 @@ bounds of the board."
    and turns it into a list. Used by sudoku-download-new-puzzle."
   (unless (featurep 'url)
     (require 'url))
-  (save-excursion
-    (set-buffer (url-retrieve-synchronously source))
+  (with-current-buffer
+    (url-retrieve-synchronously source)
     (sudoku-get-new-puzzle)))
 
 (defun sudoku-get-new-puzzle ()
@@ -1022,6 +1034,92 @@ bounds of the board."
 		   (search-forward "<INPUT NAME=cheat ID=\"cheat\" TYPE=hidden VALUE="))
     (delete-region (search-forward "<INPUT NAME=options TYPE=hidden VALUE=") (point-max))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Try to generate own puzzles
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defconst sudoku-symbols '(1 2 3 4 5 6 7 8 9))
+
+(defun sudoku-shuffle (sequence)
+  (cl-loop for i from (length sequence) downto 2
+        do (cl-rotatef (elt sequence (random i))
+                    (elt sequence (1- i))))
+  sequence)
+
+(defun sudoku-generate-mask (level)
+  (let ((zeros (cond ((string= level 'easy)
+		  (- 81 40))
+		 ((string= level 'medium)
+		  (- 81 32)) 
+		 ((string= level 'hard)
+		  (- 81 25))
+		 ((string= level 'evil)
+		  (- 81 20))))
+	      (mask nil))
+    (dotimes (i zeros)
+      (setq mask (cons 0 mask)))
+    (message "%d" (- 81 (length mask)))
+    (dotimes (i (- 81 (length mask)))
+      (setq mask (cons 1 mask)))
+    (sudoku-shuffle mask)))
+
+(defun sudoku-create-new-board (difficulty)
+  (let ((puzzle (sudoku-generate-board (sudoku-create-empty-board) 0))
+	(mask (sudoku-generate-mask difficulty))
+	(x 0)
+	(y 0))
+    (while (< x 9)
+      (while (< y 9)
+	(unless (/= (nth (+ (* 9 x) y) mask) 0)
+	    (setq puzzle (sudoku-change-cell puzzle x y 0)))
+	(setq y (1+ y)))
+      (setq y 1)
+      (setq x (1+ x)))
+    puzzle))
+
+(defun sudoku-generate-board (board fnr)
+  (let* ((coords (sudoku-number-to-cell fnr))
+	(x (car coords))
+	(y (car (cdr coords)))
+	(hints  (sudoku-shuffle (sudoku-raw-cell-possibles board x y)))
+	(valid-board nil))    
+    (if (= 72 fnr)
+	board
+      (progn
+	(while (and (< 0 (length hints)) (not valid-board))
+	  (setq new-board (sudoku-change-cell board x y (pop hints)))
+	  (if (sudoku-board-valid new-board)		
+	      (setq valid-board (sudoku-generate-board new-board (1+ fnr)))
+	    nil))
+	valid-board))))
+ 
+(defun sudoku-create-empty-board ()
+  (let ((new-board (list (sudoku-shuffle sudoku-symbols))))
+    (while (> 9 (length new-board))
+	  (setq new-board (cons '(0 0 0 0 0 0 0 0 0) new-board)))
+    new-board))
+
+(defun sudoku-board-valid (board)
+  (let ((x 0)
+	(y 0)
+	(res t))
+  (while (and res (< x 9))
+    (while (and res (< y 9))      
+      (unless (or (/= (sudoku-cell board x y) 0) (sudoku-raw-cell-possibles board x y))
+	  (setq res nil))
+      (setq y (1+ y)))
+    (setq y 0)
+    (setq x (1+ x)))
+  res))
+
+(defun sudoku-raw-cell-possibles (board x y)
+ (let ((possibilities nil))
+    (if (/= (sudoku-cell board x y) 0)
+	(cons (sudoku-cell board x y) possibilities)
+      (progn
+	(dotimes (i 9 possibilities)
+	  (let ((n (1+ i)))
+	    (when (not (member n (remove 0 (sudoku-cell-elts-flat board x y))))
+	      (setq possibilities (cons n possibilities)))))))))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;Puzzles. About 200.
 ;;50 each of easy, medium, hard, and evil
