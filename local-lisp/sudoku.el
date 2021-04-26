@@ -27,7 +27,7 @@
 (when (symbolp sudoku-level)
   (setq sudoku-level (symbol-name sudoku-level)))
 
-(defcustom sudoku-download nil
+(defcustom sudoku-download "Preconfigured Puzzle"
   "*Should sudoku download puzzles from the web?"
   :type  '(radio
 	   (const "Preconfigured Puzzled")
@@ -219,7 +219,7 @@ are: \\{sudoku-mode-map}"
     (setq buffer-read-only t)))
 
 
-(defun sudoku-create-board (level &optional download)
+(defun sudoku-create-board (level download)
   "Checks both the \"sudoku-download\" variable, and the
   \"sudoku-level\" variable. Uses these to either choose a random
   included board (if download is nil) or to download one from
